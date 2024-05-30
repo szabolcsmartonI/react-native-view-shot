@@ -17,20 +17,17 @@ RCT_EXPORT_MODULE()
 
 @synthesize bridge = _bridge;
 
-- (dispatch_queue_t)methodQueue
-{
+- (dispatch_queue_t)methodQueue {
   return RCTGetUIManagerQueue();
 }
 
-RCT_EXPORT_METHOD(captureScreen: (NSDictionary *)options
+RCT_EXPORT_METHOD(captureScreen:(NSDictionary *)options
                   resolve:(RCTPromiseResolveBlock)resolve
-                  reject:(RCTPromiseRejectBlock)reject) 
-{
-  [self captureRef: [NSNumber numberWithInt:-1] withOptions:options resolve:resolve reject:reject];
+                  reject:(RCTPromiseRejectBlock)reject) {
+  [self captureRef:@(-1) withOptions:options resolve:resolve reject:reject];
 }
 
-RCT_EXPORT_METHOD(releaseCapture:(nonnull NSString *)uri)
-{
+RCT_EXPORT_METHOD(releaseCapture:(nonnull NSString *)uri) {
   NSString *directory = [NSTemporaryDirectory() stringByAppendingPathComponent:@"ReactNative"];
   // Ensure it's a valid file in the tmp directory
   if ([uri hasPrefix:directory] && ![uri isEqualToString:directory]) {
@@ -44,20 +41,16 @@ RCT_EXPORT_METHOD(releaseCapture:(nonnull NSString *)uri)
 RCT_EXPORT_METHOD(captureRef:(nonnull NSNumber *)target
                   withOptions:(NSDictionary *)options
                   resolve:(RCTPromiseResolveBlock)resolve
-                  reject:(RCTPromiseRejectBlock)reject)
-{
+                  reject:(RCTPromiseRejectBlock)reject) {
   [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager, NSDictionary<NSNumber *, UIView *> *viewRegistry) {
-
     // Get view
     UIView *view;
-
     if ([target intValue] == -1) {
       UIWindow *window = [[UIApplication sharedApplication] keyWindow];
       view = window;
     } else {
       view = viewRegistry[target];
     }
-
     if (!view) {
       reject(RCTErrorUnspecified, [NSString stringWithFormat:@"No view found with reactTag: %@", target], nil);
       return;
@@ -72,19 +65,17 @@ RCT_EXPORT_METHOD(captureRef:(nonnull NSNumber *)target
 
     // Capture image
     BOOL success;
-
-    UIView* rendered;
-    UIScrollView* scrollView;
+    UIView *rendered;
+    UIScrollView *scrollView;
     if (snapshotContentContainer) {
       if (![view isKindOfClass:[RCTScrollView class]]) {
-        reject(RCTErrorUnspecified, [NSString stringWithFormat:@"snapshotContentContainer can only be used on a RCTScrollView. instead got: %@", view], nil);
+        reject(RCTErrorUnspecified, [NSString stringWithFormat:@"snapshotContentContainer can only be used on a RCTScrollView. Instead got: %@", view], nil);
         return;
       }
-      RCTScrollView* rctScrollView = view;
+      RCTScrollView *rctScrollView = view;
       scrollView = rctScrollView.scrollView;
       rendered = scrollView;
-    }
-    else {
+    } else {
       rendered = view;
     }
 
@@ -106,19 +97,15 @@ RCT_EXPORT_METHOD(captureRef:(nonnull NSNumber *)target
       scrollView.frame = CGRectMake(0, 0, scrollView.contentSize.width, scrollView.contentSize.height);
     }
 
-    UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:size];
-    
+    UIGraphicsBeginImageContextWithOptions(size, NO, 0);
     if (renderInContext) {
-      // this comes with some trade-offs such as inability to capture gradients or scrollview's content in full but it works for large views
-      [rendered.layer renderInContext: UIGraphicsGetCurrentContext()];
+      [rendered.layer renderInContext:UIGraphicsGetCurrentContext()];
       success = YES;
-    }
-    else {
-      // this doesn't work for large views and reports incorrect success even though the image is blank
+    } else {
       success = [rendered drawViewHierarchyInRect:(CGRect){CGPointZero, size} afterScreenUpdates:YES];
     }
-   
-    UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext * _Nonnull rendererContext) {}];
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
 
     if (snapshotContentContainer) {
       // Restore scroll & frame
@@ -138,35 +125,27 @@ RCT_EXPORT_METHOD(captureRef:(nonnull NSNumber *)target
 
     // Convert image to data (on a background thread)
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-
       NSData *data;
       if ([format isEqualToString:@"jpg"]) {
         CGFloat quality = [RCTConvert CGFloat:options[@"quality"]];
         data = UIImageJPEGRepresentation(image, quality);
-      }
-      else {
+      } else {
         data = UIImagePNGRepresentation(image);
       }
 
       NSError *error = nil;
       NSString *res = nil;
       if ([result isEqualToString:@"base64"]) {
-        // Return as a base64 raw string
-        res = [data base64EncodedStringWithOptions: 0];
-      }
-      else if ([result isEqualToString:@"data-uri"]) {
-        // Return as a base64 data uri string
-        NSString *base64 = [data base64EncodedStringWithOptions: 0];
+        res = [data base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength];
+      } else if ([result isEqualToString:@"data-uri"]) {
+        NSString *base64 = [data base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength];
         NSString *imageFormat = ([format isEqualToString:@"jpg"]) ? @"jpeg" : format;
         res = [NSString stringWithFormat:@"data:image/%@;base64,%@", imageFormat, base64];
-      }
-      else {
-        // Save to a temp file
-        NSString *path = RCTTempFilePath(format, &error);
-        if (path && !error) {
-          if ([data writeToFile:path options:(NSDataWritingOptions)0 error:&error]) {
-            res = path;
-          }
+      } else {
+        // Save to a fixed temp file name
+        NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:@"fixed_screenshot_name.png"];
+        if ([data writeToFile:path options:(NSDataWritingOptions)0 error:&error]) {
+          res = path;
         }
       }
 
@@ -176,11 +155,13 @@ RCT_EXPORT_METHOD(captureRef:(nonnull NSNumber *)target
       }
 
       // If we reached here, something went wrong
-      if (error) reject(RCTErrorUnspecified, error.localizedDescription, error);
-      else reject(RCTErrorUnspecified, @"viewshot unknown error", nil);
+      if (error) {
+        reject(RCTErrorUnspecified, error.localizedDescription, error);
+      } else {
+        reject(RCTErrorUnspecified, @"viewshot unknown error", nil);
+      }
     });
   }];
 }
-
 
 @end
