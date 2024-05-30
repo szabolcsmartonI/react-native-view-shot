@@ -176,6 +176,32 @@ public class RNViewShotModule extends ReactContextBaseJavaModule implements Turb
      * Create a temporary file in the cache directory on either internal or external storage,
      * whichever is available and has more free space.
      */
+    // @NonNull
+    // private File createTempFile(@NonNull final Context context, @NonNull final String ext, String fileName) throws IOException {
+    //     final File externalCacheDir = context.getExternalCacheDir();
+    //     final File internalCacheDir = context.getCacheDir();
+    //     final File cacheDir;
+
+    //     if (externalCacheDir == null && internalCacheDir == null) {
+    //         throw new IOException("No cache directory available");
+    //     }
+
+    //     if (externalCacheDir == null) {
+    //         cacheDir = internalCacheDir;
+    //     } else if (internalCacheDir == null) {
+    //         cacheDir = externalCacheDir;
+    //     } else {
+    //         cacheDir = externalCacheDir.getFreeSpace() > internalCacheDir.getFreeSpace() ?
+    //                 externalCacheDir : internalCacheDir;
+    //     }
+
+    //     final String suffix = "." + ext;
+    //     if (fileName != null) {
+    //         return File.createTempFile(fileName, suffix, cacheDir);
+    //     }
+    //     return File.createTempFile(TEMP_FILE_PREFIX, suffix, cacheDir);
+    // }
+
     @NonNull
     private File createTempFile(@NonNull final Context context, @NonNull final String ext, String fileName) throws IOException {
         final File externalCacheDir = context.getExternalCacheDir();
@@ -196,9 +222,18 @@ public class RNViewShotModule extends ReactContextBaseJavaModule implements Turb
         }
 
         final String suffix = "." + ext;
+        File tempFile;
         if (fileName != null) {
-            return File.createTempFile(fileName, suffix, cacheDir);
+            tempFile = new File(cacheDir, fileName + suffix);
+        } else {
+            tempFile = File.createTempFile(TEMP_FILE_PREFIX, suffix, cacheDir);
         }
-        return File.createTempFile(TEMP_FILE_PREFIX, suffix, cacheDir);
+
+        // Ensure that the file doesn't already exist
+        if (tempFile.exists()) {
+            tempFile.delete();
+        }
+        
+        return tempFile;
     }
 }
